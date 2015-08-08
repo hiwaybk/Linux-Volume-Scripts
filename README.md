@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=0 --->
+<!--- MinorVersion=1 --->
 <!--- PackageVersion=1 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
