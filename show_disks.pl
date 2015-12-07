@@ -2,133 +2,554 @@
 
 $DEBUG = 0;
 
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -x
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b
+
+# Define options
+($OPTIONS = <<END_OPTIONS) =~ s/^[^\S\n]+//gm;
+    -h    Print this help
+    -d    Debuging level
+    -x    Dump all data in Perl hash format
+    -b    Print backup summaries for each disk
+    -l    List device info
+END_OPTIONS
+
 use Data::Dumper;
+use Getopt::Std;
+
+sub help($) {
+	my $MSG = shift;
+	print qq{\n};
+	print $MSG . qq{\n\n};
+	print $OPTIONS . qq{\n\n};
+	exit 1;
+}
+
+sub checkArg($$$) {
+	my $opt = shift;
+	my $varRef = shift;
+	my $hashRef = shift;
+	if (exists $hashRef->{$opt}) {
+		if (defined $hashRef->{$opt}) {
+			$$varRef = $hashRef->{$opt};
+		} else {
+			help(qq{Option '$opt' requires an argument.});
+		}
+	}
+}
+
+sub convertBytes($) {
+    my $size = shift();
+
+    if ($size > 1099511627776) {	#   TiB: 1024 GiB
+        return sprintf("%.2f TiB", $size / 1099511627776);
+    } elsif ($size > 1073741824) {	#   GiB: 1024 MiB
+        return sprintf("%.2f GiB", $size / 1073741824);
+    } elsif ($size > 1048576) {		#   MiB: 1024 KiB
+        return sprintf("%.2f MiB", $size / 1048576);
+    } elsif ($size > 1024) {		#   KiB: 1024 B
+        return sprintf("%.2f KiB", $size / 1024);
+    } else {						#   bytes
+        return "$size byte" . ($size == 1 ? "" : "s");
+    }
+}
 
 sub getDiskDevices() {
-    my @devices;
+    print qq{getDiskDevices: Starting...\n} if $DEBUG;
+    my %devices;
+    my @fields;
     open(PARTITIONS, "/proc/partitions") or die;
     while (my $chunk = <PARTITIONS>) {
         foreach my $line (split(/[\n\r]+/, $chunk)) {
-            print Data::Dumper->Dump([$line], ['line from /proc/partitions']) if $DEBUG;
-            my @line = unpack("A4 A9 A11 A80", $line);
-            print Data::Dumper->Dump([\@line], ['line from /proc/partitions']) if ($DEBUG > 2);
-            if (@line[0] == 8) {
-                (my $device) = ($line[3] =~ /^\s*([^\s]+)/);
-                print Data::Dumper->Dump([$device], ['device from /proc/partitions']) if $DEBUG;
-                push(@devices, $device);
+            my %device;
+            print Data::Dumper->Dump([$line], ['getDiskDevices: line from /proc/partitions']) if ($DEBUG > 8);
+            $line =~ s/^\s*(.*?)\s*$/\1/;
+            my @line = split(/\s+/, $line);
+            print Data::Dumper->Dump([\@line], ['getDiskDevices: line from /proc/partitions']) if ($DEBUG > 7);
+            if (@fields) {
+                foreach my $field (@fields) {
+                    $device{$field} = shift(@line);
+                }
+                print Data::Dumper->Dump([\%device], ['getDiskDevices: device']) if ($DEBUG > 6);
+                if ($device{'name'} =~ /^(sd[a-z]+)(\d+)$/) {
+                    $devices{$1}{'partitions'}{$1 . $2} = \%device;
+                } else {
+                    $devices{$device{'name'}} = \%device;
+                }
+            } else {
+                @fields = @line;
+                print Data::Dumper->Dump([\@fields], ['getDiskDevices: fields']) if ($DEBUG > 6);
             }
         }
     }
-    return sort @devices;
+    print Data::Dumper->Dump([\%devices], ['getDiskDevices: devices']) if ($DEBUG > 5);
+    return %devices;
 }
 
-sub getPartitions() {
-    my @partitions;
-    foreach my $device (getDiskDevices()) {
-        push(@partitions, $device) if ($device =~ /\d$/);
-        print Data::Dumper->Dump([$device], ['device from getPartitions()']) if $DEBUG;
-    }
-    return sort @partitions;
-}
-
-sub getDisks() {
-    my @disks;
-    foreach my $device (getDiskDevices()) {
-        push(@disks, $device) unless ($device =~ /\d$/);
-        print Data::Dumper->Dump([$device], ['device from getPartitions()']) if $DEBUG;
-    }
-    return sort @disks;
-}
-
-sub getMdDeviceUUID($) {
-    my $device = shift;
-    #     UUID=`sudo mdadm --detail /dev/$ARRAY | grep UUID | cut -d: -f2-`
-    $cmd = "sudo mdadm --detail /dev/$device";
-    print Data::Dumper->Dump([$cmd], ['cmd']) if $DEBUG;
-    open(MDADM, $cmd . "|") or die qq{Can't run: $cmd: $!};
-    while (my $chunk = <MDADM>) {
-        foreach my $line (split(/[\n\r]+/, $chunk)) {
-            print Data::Dumper->Dump([$line], ['line from $cmd']) if $DEBUG;
-            next unless ($line =~ /\s*UUID\s:\s+(.*)$/);
-            return $1;
-        }
-    }
-}
-
-sub getMdDeviceArrayUUID($) {
-    my $device = shift;
-    #     UUID=`sudo mdadm --detail /dev/$ARRAY | grep UUID | cut -d: -f2-`
-    $cmd = "sudo mdadm --examine /dev/$device";
-    print Data::Dumper->Dump([$cmd], ['cmd']) if $DEBUG;
-    open(MDADM, $cmd . " 2>&1 |") or die qq{Can't run: $cmd: $!};
-    my $pattern = "Array UUID";
-    while (my $chunk = <MDADM>) {
-        foreach my $line (split(/[\n\r]+/, $chunk)) {
-            print Data::Dumper->Dump([$line], ['line from $cmd']) if $DEBUG;
-            $pattern = "UUID" if ($line =~ /Version : 0.90.00/);
-            next unless ($line =~ /$pattern\s:\s+(.*)$/);
-            print Data::Dumper->Dump([$1], ['UUID']) if $DEBUG;
-            return $1;
-        }
-    }
-}
-
-sub getMdUuidDevices() {
-    my %UUIDs;
-    my @devices = getDiskDevices();
-    foreach my $device (@devices) {
-        my $UUID = getMdDeviceArrayUUID($device);
-        if ($UUID) {
-            my @memberDevices = @{$UUIDs{$UUID}};
-            push(@memberDevices, $device);
-            $UUIDs{$UUID} = [ sort @memberDevices ];
-        }
-    }
-    print Data::Dumper->Dump([\%UUIDs], ['%UUIDs']) if $DEBUG;
-    return %UUIDs;
-}
-
-sub getMdDevices() {
-    my %UUIDs = getMdUuidDevices();
-    my %raidDevices;
-    open(MDSTAT, "/proc/mdstat") or die;
-    while (my $chunk = <MDSTAT>) {
-        foreach my $line (split(/[\n\r]+/, $chunk)) {
-
-            print "/proc/mdstat: " . $line . "\n" if $DEBUG;
-            next if ($line =~ /^Personalities :/);
-            next unless $line =~ /^md\d+ :/;
-            (my $md, my $componentList) = split(/\s*:\s*/, $line);
-            $deviceUUID = getMdDeviceUUID($md);
-            $raidDevices{$md}{'uuid'} = getMdDeviceUUID($md);
-            if (exists $UUIDs{$deviceUUID}) {
-                $raidDevices{$md}{'components'}{'discovered'} = $UUIDs{$deviceUUID};
+sub getDiskSmartInfo(%) {
+    print qq{getDiskSmartInfo: Starting...\n} if $DEBUG;
+    my %devices = @_;
+    print Data::Dumper->Dump([\%devices], ['getDiskSmartInfo: devices']) if ($DEBUG > 8);
+    foreach my $device (sort keys %devices) {
+        print qq{getDiskSmartInfo: checking $device\n} if ($DEBUG > 5);
+        next unless $devices{$device}{'major'} == 8; # Linux SCSI disks (SATA)
+        print qq{getDiskSmartInfo: found physical disk device: $device\n} if ($DEBUG > 5);
+        my $cmd = qq{sudo smartctl --info /dev/} . $device;
+        print qq{getDiskSmartInfo: running: $cmd\n} if ($DEBUG > 6);
+        my %info;
+        open(SMARTCTL, $cmd . " 2>&1 |") or die;
+        while (my $chunk = <SMARTCTL>) {
+            foreach my $line (split(/[\n\r]+/, $chunk)) {
+                print "getDiskSmartInfo: smartctl: " . $line . "\n" if ($DEBUG > 7);
+                next unless ($line =~ /Model Family|Device Model|Serial Number/);
+                if ($line =~ /Model Family:\s+(.*)$/) {
+                    $info{'type'} = $1;
+                    print "getDiskSmartInfo: smartctl: type -> " . $1 . "\n" if ($DEBUG > 6);
+                } elsif ($line =~ /Device Model:\s+(.*)$/) {
+                    $info{'model'} = $1;
+                    print "getDiskSmartInfo: smartctl: model -> " . $1 . "\n" if ($DEBUG > 6);
+                } elsif ($line =~ /Serial Number:\s+(.*)$/) {
+                    $info{'serial'} = $1;
+                    print "getDiskSmartInfo: smartctl: serial -> " . $1 . "\n" if ($DEBUG > 6);
+                }
             }
-            my @componentList = split(/\s+/, $componentList);
-            my @components;
-            foreach my $component (@componentList) {
-                # md21 : active raid1 sdh3[3](W) sde3[4](W) sdd3[2]
-                $component =~ s/\[.*$//;
-                print $md . " -> " . $component . "\n" if $DEBUG;
-                next if ($component =~ /active/);
-                next if ($component =~ /raid1/);
-                push(@components, $component);
+        }
+        print Data::Dumper->Dump([\%info], ['getDiskSmartInfo: info']) if ($DEBUG > 5);
+        $devices{$device}{'smart'} = \%info;
+    }
+    return %devices;
+}
+
+sub getDiskPartedInfo(%) {
+    print qq{getDiskPartedInfo: Starting...\n} if $DEBUG;
+    my %devices = @_;
+    print Data::Dumper->Dump([\%devices], ['getDiskPartedInfo: devices']) if ($DEBUG > 8);
+    foreach my $device (sort keys %devices) {
+        print qq{getDiskPartedInfo: checking $device\n} if ($DEBUG > 5);
+        next unless $devices{$device}{'major'} == 8; # Linux SCSI disks (SATA)
+        print qq{getDiskPartedInfo: found physical disk device: $device\n} if ($DEBUG > 5);
+        my $cmd = qq{sudo parted -m /dev/} . $device . qq{ unit s print};
+        print qq{getDiskPartedInfo: running: $cmd\n} if ($DEBUG > 6);
+        my %info;
+        open(PARTED, $cmd . " 2>&1 |") or die;
+        while (my $chunk = <PARTED>) {
+            foreach my $line (split(/[\n\r]+/, $chunk)) {
+                print "getDiskPartedInfo: PARTED: " . $line . "\n" if ($DEBUG > 6);
+                next unless ($line =~ /:/);
+                if ($line =~ m,/dev/$device:(.*)$,) {
+                    my @info = split(/:/, $1);
+                    $devices{$device}{'parted'}{'size'} = $info[0];
+                    $devices{$device}{'parted'}{'type'} = $info[1];
+                    $devices{$device}{'parted'}{'sectorSizeLogical'} = $info[2];
+                    $devices{$device}{'parted'}{'sectorSizePhysical'} = $info[3];
+                    $devices{$device}{'parted'}{'partitionTable'} = $info[4];
+                    $devices{$device}{'parted'}{'model'} = $info[5];
+                } elsif ($line =~ m,(\d+):(.*);$,) {
+                    my $partition = $1;
+                    my @info = split(/:/, $2);
+                    $devices{$device}{'partitions'}{$device . $partition}{'parted'}{'start'} = $info[0];
+                    $devices{$device}{'partitions'}{$device . $partition}{'parted'}{'end'} = $info[1];
+                    $devices{$device}{'partitions'}{$device . $partition}{'parted'}{'size'} = $info[2];
+                    $devices{$device}{'partitions'}{$device . $partition}{'parted'}{'fs'} = $info[3];
+                    $devices{$device}{'partitions'}{$device . $partition}{'parted'}{'name'} = $info[4];
+                    $devices{$device}{'partitions'}{$device . $partition}{'parted'}{'flags'} = $info[5];
+                }
+                my $sectors = $devices{$device}{'parted'}{'size'};
+                my $sectorsize = $devices{$device}{'parted'}{'sectorSizeLogical'};
+                $sectors =~ s/s$//;
+                $devices{$device}{'parted'}{'Capacity'} = convertBytes($sectors * $sectorsize);
+             }
+         }
+        print Data::Dumper->Dump([\%info], ['getDiskPartedInfo: info']) if ($DEBUG > 5);
+    }
+    return %devices;
+}
+
+sub getMdDeviceInfo(%) {
+    print qq{getMdDeviceInfo: Starting...\n} if $DEBUG;
+    my %devices = @_;
+    print Data::Dumper->Dump([\%devices], ['getMdDeviceInfo: devices']) if ($DEBUG > 8);
+    foreach my $device (sort keys %devices) {
+        print qq{getMdDeviceInfo: checking $device\n} if ($DEBUG > 5);
+        next unless $devices{$device}{'major'} == 8; # Linux SCSI (SATA) devices
+        print qq{getMdDeviceInfo: found physical disk device: $device\n} if ($DEBUG > 5);
+        next unless (defined $devices{$device}{'partitions'});
+        foreach my $partition (sort keys %{$devices{$device}{'partitions'}}) {
+            my $cmd = qq{sudo mdadm --examine /dev/} . $partition;
+            print qq{getMdDeviceInfo: running: $cmd\n} if ($DEBUG > 6);
+            my %info;
+            open(MDADM, $cmd . " 2>&1 |") or die;
+            while (my $chunk = <MDADM>) {
+                foreach my $line (split(/[\n\r]+/, $chunk)) {
+                    print "getMdDeviceInfo: mdadm: " . $line . "\n" if ($DEBUG > 7);
+                    if ($line =~ /^ *(.*) : (.*)$/) {
+                        $info{$1} = $2;
+                    }
+                }
             }
-            $raidDevices{$md}{'components'}{'active'} = [ sort @components ];
-            my @partitions = ( @{$raidDevices{$md}{'components'}{'active'}}, @{$raidDevices{$md}{'components'}{'discovered'}});
-            my %drives;
-            foreach my $partition (sort @partitions) {
-                my $drive = $partition;
-                $drive =~ s/\d+$//;
-                $drives{$drive}++;
-            }
-            $raidDevices{$md}{'components'}{'drives'} = [ sort keys %drives ];
+            print Data::Dumper->Dump([\%info], ['getMdDeviceInfo: info']) if ($DEBUG > 5);
+            $devices{$device}{'partitions'}{$partition}{'mdadm'} = \%info;
         }
     }
-    print Data::Dumper->Dump([\%raidDevices], ['%raidDevices']) if $DEBUG;
-    return %raidDevices;
-
+    return %devices;
 }
+
+sub getMdArrayInfo(%) {
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 10 -x
+    print qq{getMdArrayInfo: Starting...\n} if $DEBUG;
+    my %devices = @_;
+    print Data::Dumper->Dump([\%devices], ['getMdArrayInfo: devices']) if ($DEBUG > 8);
+     foreach my $device (sort keys %devices) {
+         print qq{getMdArrayInfo: checking $device\n} if ($DEBUG > 5);
+         next unless $devices{$device}{'major'} == 9; # Linux MD devices
+         print qq{getMdArrayInfo: found a MD device: $device\n} if ($DEBUG > 5);
+         my $cmd = qq{sudo mdadm --detail /dev/} . $device;
+         print qq{getMdArrayInfo: running: $cmd\n} if ($DEBUG > 6);
+         my %info;
+         open(MDADM, $cmd . " 2>&1 |") or die;
+         while (my $chunk = <MDADM>) {
+             foreach my $line (split(/[\n\r]+/, $chunk)) {
+                print "getMdArrayInfo: mdadm: " . $line . "\n" if ($DEBUG > 9);
+                if ($line =~ /^ *(.*) : (.*)$/) {
+                    $info{$1} = $2;
+	                print "getMdArrayInfo: key: " . $1 . "; value: " . $1 . "\n" if ($DEBUG > 7);
+                } else {
+                    $line =~ s/^\s*(.*?)\s*$/$1/;
+                    my @line = split(/\s+/, $line);
+                    my $drive = shift @line;
+	                print "getMdArrayInfo: drive: " . $drive . "; values: " . join("|", @line) . "\n" if ($DEBUG > 7);
+                    if ($drive ne 'Number') {
+                        $info{'drives'}{$drive}{'major'} = shift @line;
+                        $info{'drives'}{$drive}{'minor'} = shift @line;
+                        $info{'drives'}{$drive}{'raiddevice'} = shift @line;
+                        my $disk = pop(@line);
+                        $disk =~ s,^/dev/,,;
+                        $info{'drives'}{$drive}{'disk'} = $disk;
+                        $info{'drives'}{$drive}{'state'} = \@line;
+                    }
+                }
+            }
+        }
+        print Data::Dumper->Dump([\%info], ['getMdArrayInfo: info']) if ($DEBUG > 5);
+        $devices{$device}{'mdadm'} = \%info;
+    }
+    return %devices;
+}
+
+sub getLVMdisks() {
+    print qq{getLVMdisks: Starting...\n} if $DEBUG;
+    my %LVM2;
+    my $cmd = qq{sudo lvs -o+devices --noheadings --nameprefixes --aligned --separator '|'};
+    print qq{getLVMdisks: Running: $cmd\n} if ($DEBUG > 5);
+    foreach my $line (split(/[\n\r]+/, qx{$cmd})) {
+        my %volInfo;
+        $line =~ s/^\s*(.*?)\s*$/$1/;
+        print "getLVMdisks line: " . $line . "\n" if ($DEBUG > 8);
+        foreach my $item (split(/\|/, $line)) {
+            print "getLVMdisks item: " . $item . "\n" if ($DEBUG > 8);
+            my ($key, $value) = split(/=/, $item);
+            $value =~ s/^'(.*)'$/$1/;
+            print qq{getLVMdisks value: "} . $key . qq{" = "} . $value . qq{"\n} if ($DEBUG > 8);
+            $volInfo{$key} = $value;
+        }
+        print Data::Dumper->Dump([\%volInfo], ['getLVMdisks: volInfo']) if ($DEBUG > 7);
+        my $vg = $volInfo{'LVM2_VG_NAME'};
+        my $lv = $volInfo{'LVM2_LV_NAME'};
+        if (! exists $LVM2{$vg}{$lv}) {
+            $LVM2{$vg}{$lv} = \%volInfo;
+        } else {
+            foreach my $key (keys %{$LVM2{$vg}{$lv}}) {
+                if (! exists $LVM2{$vg}{$lv}{$key}) {
+                    $LVM2{$vg}{$lv}{$key} = $volInfo{$key};
+                } else {
+                    if ($LVM2{$vg}{$lv}{$key} ne $volInfo{$key}) {
+                        $LVM2{$vg}{$lv}{$key} .= qq{,} . $volInfo{$key};
+                    }
+                }
+            }
+        }
+    }
+    foreach my $vg (keys %LVM2) {
+        foreach my $lv (keys %{$LVM2{$vg}}) {
+            my %disks;
+            foreach my $device (split(/,/, $LVM2{$vg}{$lv}{'LVM2_DEVICES'})) {
+                my $disk = $device;
+                $disk =~ s/\(\d+\)$//;
+                $disk =~ s,^/dev/,,;
+                $disks{$disk}++;
+            }
+            my @disks = sort keys %disks;
+            $LVM2{$vg}{$lv}{'disks'} = \@disks;
+        }
+    }
+    print Data::Dumper->Dump([\%LVM2], ['getLVMdisks: LVM2']) if ($DEBUG > 6);
+    return %LVM2;
+}
+
+sub getDeviceInfo($$$) {
+    print qq{getDeviceInfo: Starting... ($DEBUG)\n} if $DEBUG;
+    my $disk = shift;
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+    my $lvmRef = shift;
+    my %lvm = %{$lvmRef};
+    print qq{getDeviceInfo: Getting info for disk: } . $disk . qq{\n} if $DEBUG;
+    my %diskinfo;
+    foreach my $dg (sort keys %lvm) {
+        if (exists $lvm{$dg}{$disk}) {
+            %diskinfo = %{$lvm{$dg}{$disk}};
+        } elsif (exists $devices{$disk}) {
+            %diskinfo = %{$devices{$disk}};
+        }
+    }
+    return %diskinfo;
+}
+
+sub returnDiskDevices($) {
+    print qq{returnDiskDevices: Starting... ($DEBUG)\n} if $DEBUG;
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+
+    my %disks;
+
+    foreach my $device (sort keys %devices) {
+        print qq{returnDiskDevices: checking $device.\n} if ($DEBUG > 2);
+        if (exists $devices{$device}{'major'}) {
+            print qq{returnDiskDevices: major device number is } . $devices{$device}{'major'} . qq{\n} if ($DEBUG > 2);
+            if ($devices{$device}{'major'} == 8) {
+                print qq{returnDiskDevices: It's a disk!\n} if ($DEBUG > 2);
+                push (@{$disks{$device}{'subdevices'}}, $device);
+                if (exists $devices{$device}{'partitions'}) {
+                    push (@{$disks{$device}{'subdevices'}}, keys $devices{$device}{'partitions'});
+                }
+            }
+        }
+    }
+
+    print Data::Dumper->Dump([\%disks], ['returnDiskDevices: disks']) if ($DEBUG > 1);
+    return %disks;
+}
+
+sub findMetaDevices($$) {
+    print qq{returnMetaDevices: Starting... ($DEBUG)\n} if $DEBUG;
+    my $partitionsRef = shift;
+    my $devicesRef = shift;
+
+    my @partitions = @{$partitionsRef};
+    my %devices = %{$devicesRef};
+
+    print qq{returnMetaDevices: Finding meta-devices with these members:\n\t} . join("\n\t", @partitions) . "\n" if $DEBUG;
+	my %metaDevices;
+
+    foreach my $device (sort keys %devices) {
+        print qq{returnMetaDevices: checking $device.\n} if ($DEBUG > 2);
+        if (exists $devices{$device}{'mdadm'}) {
+            print qq{returnMetaDevices: device } . $device . qq{ is a meta-device\n} if ($DEBUG > 2);
+	        if (exists $devices{$device}{'mdadm'}{'drives'}) {
+	        	foreach $drive (sort keys %{$devices{$device}{'mdadm'}{'drives'}}) {
+		            print qq{returnMetaDevices: checking member } . $drive . qq{ of } . $device . qq{\n} if ($DEBUG > 2);
+	        		my $member = $devices{$device}{'mdadm'}{'drives'}{$drive}{'disk'};
+	        		if (grep(/$member/, @partitions)) {
+			            print qq{returnMetaDevices: found matching member } . $member . qq{ of } . $device . qq{\n} if ($DEBUG > 2);
+	        			$metaDevices{$device}++;
+	        		}
+	        	}
+            }
+        }
+    }
+
+	my @metaDevices = sort keys %metaDevices;
+
+    print Data::Dumper->Dump([\@metaDevices], ['returnMetaDevices: metaDevices']) if ($DEBUG > 1);
+    return @metaDevices;
+}
+
+sub findLVMvolumes($$) {
+    print qq{findLVMvolumes: Starting... ($DEBUG)\n} if $DEBUG;
+    my $devicesRef = shift;
+    my $lvmRef = shift;
+
+    my @devices = @{$devicesRef};
+    my %lvm = %{$lvmRef};
+
+    print qq{findLVMvolumes: Finding LVM volumes with these devices:\n\t} . join("\n\t", @devices) . "\n" if $DEBUG;
+	my %volumes;
+
+    foreach my $group (sort keys %lvm) {
+		print qq{findLVMvolumes: checking volume group $group.\n} if ($DEBUG > 2);
+	    foreach my $volume (sort keys %{$lvm{$group}}) {
+			print qq{findLVMvolumes: checking volume $volume.\n} if ($DEBUG > 2);
+		    foreach my $disk (sort @{$lvm{$group}{$volume}{'disks'}}) {
+				print qq{findLVMvolumes: checking volume $volume disk $disk.\n} if ($DEBUG > 2);
+	        	if (grep(/$disk/, @devices)) {
+			    	print qq{findLVMvolumes: found matching disk } . $disk . qq{ of } . $volume . qq{\n} if ($DEBUG > 2);
+	        		$volumes{$group}{$volume}++;
+	        	}
+	        }
+        }
+     }
+
+    print Data::Dumper->Dump([\%volumes], ['findLVMvolumes: volumes']) if ($DEBUG > 1);
+    return %volumes;
+}
+
+sub getBackupSummary($$) {
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -b
+    print qq{getBackupSummary: Starting... ($DEBUG)\n} if $DEBUG;
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+    my $lvmRef = shift;
+    my %lvm = %{$lvmRef};
+    my %backupInfo;
+
+    my %disks = returnDiskDevices(\%devices);
+    foreach my $disk (keys %disks) {
+        print qq{getBackupSummary: checking disk $disk.\n} if ($DEBUG > 1);
+
+        my @checkedDevices = ();
+
+        if (exists $disks{$disk}{'subdevices'}) {
+	        my @devices2check = sort @{ $disks{$disk}{'subdevices'} };
+			while (my $subdevice = shift(@devices2check)) {
+				next if ($subdevice eq $disk);
+            	print qq{getBackupSummary: checking subdevice $subdevice.\n} if ($DEBUG > 1);
+            	push(@checkedDevices, $subdevice);
+            }
+		}
+        $backupInfo{$disk}{'subdevices'} = \@checkedDevices;
+        my @partitions = ($disk, @{$backupInfo{$disk}{'subdevices'}});
+        my @metaDevices = findMetaDevices(\@partitions, \%devices);
+        $backupInfo{$disk}{'metadevices'} = \@metaDevices;
+        my @devices = ($disk, @{$backupInfo{$disk}{'subdevices'}}, @{$backupInfo{$disk}{'metadevices'}});
+        my %volumes = findLVMvolumes(\@devices, \%lvm);
+        $backupInfo{$disk}{'volumes'} = \%volumes;
+    }
+
+    return %backupInfo;
+}
+
+sub printBackupSummary($$$) {
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -b
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b
+    print qq{printBackupSummary: Starting... ($DEBUG)\n} if $DEBUG;
+    my $backupInfoRef = shift;
+    my %backupInfo = %{$backupInfoRef};
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+    my $lvmRef = shift;
+    my %lvm = %{$lvmRef};
+    print Data::Dumper->Dump([\%devices], ['devices']) if ($DEBUG);
+    print Data::Dumper->Dump([\%lvm], ['lvm']) if ($DEBUG);
+    print Data::Dumper->Dump([\%backupInfo], ['backupInfo']) if ($DEBUG);
+    my $format = "%-20s %s\n";
+    foreach my $device (sort keys %backupInfo) {
+		printf($format, "Drive:", $devices{$device}{'smart'}{'type'});
+		printf($format, "Model:", $devices{$device}{'smart'}{'model'});
+		printf($format, "Serial:", $devices{$device}{'smart'}{'serial'});
+		printf($format, "Size:",
+			$devices{$device}{'parted'}{'size'}
+			. " ("
+			. $devices{$device}{'parted'}{'Capacity'}
+			. ")"
+		);
+		printf($format, "Sector Size:",
+			$devices{$device}{'parted'}{'sectorSizePhysical'}
+			. "(physical) / "
+			. $devices{$device}{'parted'}{'sectorSizeLogical'}
+			. "(logical) "
+		);
+		printf($format, "Partition Type:",
+			$devices{$device}{'parted'}{'partitionTable'}
+			. " (currently attached as "
+			. $devices{$device}{'parted'}{'type'}
+			. " disk "
+			. $device
+			. ")"
+		);
+		foreach my $partition (sort keys %{$devices{$device}{'partitions'}}) {
+			printf($format, "Partition " . $partition . ":",
+				$devices{$device}{'partitions'}{$partition}{'parted'}{'start'}
+				. " to "
+				. $devices{$device}{'partitions'}{$partition}{'parted'}{'end'}
+				. " = "
+				. $devices{$device}{'partitions'}{$partition}{'parted'}{'size'}
+				. " ("
+				. $devices{$device}{'partitions'}{$partition}{'parted'}{'name'}
+				. ")"
+			);
+		}
+		foreach my $metaDevice (sort @{$backupInfo{$device}{'metadevices'}}) {
+			printf($format, "MD device " . $metaDevice . ":",
+				$devices{$metaDevice}{'mdadm'}{'Raid Level'}
+				. " with "
+				. $devices{$metaDevice}{'mdadm'}{'Raid Devices'}
+				. " devices ("
+				. $devices{$metaDevice}{'mdadm'}{'Active Devices'}
+				. " active)"
+			);
+		}
+		foreach my $volumeGroup (sort keys %{$backupInfo{$device}{'volumes'}}) {
+			foreach my $volume (sort keys %{$backupInfo{$device}{'volumes'}{$volumeGroup}}) {
+				printf($format, "LVM Volume:", $volume . " in " . $volumeGroup);
+			}
+		}
+    	print "\n" x 2;
+    }
+}
+
+sub main() {}
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b -d 3
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l kellybvol
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l md21
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l sdc
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -x
+print qq{MAIN CODE: Starting...\n} if $DEBUG;
+
+# Process command line arguments
+getopts("d:xl:b", \%opts);
+
+# Process debug argument
+checkArg("d", \$DEBUG, \%opts);
+$DEBUG += 0;
+print qq{MAIN CODE: DEBUG is now: $DEBUG\n} if $DEBUG;
+print Data::Dumper->Dump([\%opts], ['opts']) if $DEBUG;
+
+# Process other arguments which require values
+checkArg("l", \$LISTDISK, \%opts);
+
+# Process help if requested
+if ($opts{'h'}) {
+  print qq{\n} . $OPTIONS . qq{\n};
+  exit 0;
+}
+
+my %devices = getDiskDevices();
+%devices = getDiskSmartInfo(%devices);
+%devices = getDiskPartedInfo(%devices);
+%devices = getMdDeviceInfo(%devices);
+%devices = getMdArrayInfo(%devices);
+
+my %lvm = getLVMdisks();
+
+if ($opts{'x'}) {
+    print qq{MAIN CODE: Dumping Devices...\n} if $DEBUG;
+    print Data::Dumper->Dump([\%devices], ['devices']);
+    print qq{MAIN CODE: Dumping LVM...\n} if $DEBUG;
+    print Data::Dumper->Dump([\%lvm], ['lvm']);
+} elsif ($opts{'l'}) {
+    print qq{MAIN CODE: Listing Device: } . $opts{'l'} . qq{\n} if $DEBUG;
+    my %info = getDeviceInfo($LISTDISK, \%devices, \%lvm);
+    print Data::Dumper->Dump([\%info], ['info']) if ($DEBUG);
+} elsif ($opts{'b'}) {
+    print qq{MAIN CODE: Printing device backup summaries...\n} if $DEBUG;
+    my %backupSummary = getBackupSummary(\%devices, \%lvm);
+    print Data::Dumper->Dump([\%backupSummary], ['backupSummary']) if ($DEBUG);
+	printBackupSummary(\%backupSummary, \%devices, \%lvm);
+}
+
+__END__
+
 
 sub compareArrayRef($$) {
     my $ref1 = shift;
@@ -158,6 +579,7 @@ sub compareArrayRef($$) {
 }
 
 sub getCheckMdDevices(%) {
+    print qq{getCheckMdDevices: Starting...\n} if $DEBUG;
     my %arrays = @_;
     print Data::Dumper->Dump([\%arrays], ['getCheckMdDevices %arrays']) if $DEBUG;
     foreach my $array (sort keys %arrays) {
@@ -191,52 +613,8 @@ sub getCheckMdDevices(%) {
 }
 
 
-sub getLVMdisks() {
-    my %volumeInfo;
-    foreach my $row (split(/[\n\r]+/, qx{sudo lvs -o+devices --noheadings --nameprefixes --aligned --separator '|'})) {
-        print "lvs: " . $row . "\n" if $DEBUG;
-        my $line = $row;
-        $line =~ s/^\s+//;
-        $line =~ s/\s+$//;
-        my @row = split(/\s*\|\s*/, $line);
-        my %LVM2;
-        foreach my $info (@row) {
-             print "lvs found: " . $info . "\n" if $DEBUG > 10;
-             $cmd = $info;
-             $cmd =~ s/^/\$LVM2{'/;
-             $cmd =~ s/=/'}=/;
-             $cmd =~ s/$/;/;
-             print "cmd: " . $cmd . "\n" if $DEBUG > 10;
-             eval($cmd);
-        }
-        if ( $LVM2{'LVM2_DEVICES'} =~ /\/dev\/(.+)\((\d+)\)/ ) {
-            $LVM2{'LVM2_DEVICE'} = $1;
-            $LVM2{'LVM2_DEVICE_OFFSET'} = $2;
-        }
-        print Data::Dumper->Dump([\%LVM2], ['LVM2']) if $DEBUG;
-
-        $volgroup = $LVM2{'LVM2_VG_NAME'};
-        $volume = $LVM2{'LVM2_LV_NAME'};
-        my $blocks = $LVM2{'LVM2_DEVICES'};
-        delete $LVM2{'LVM2_VG_NAME'} if exists $LVM2{'LVM2_VG_NAME'};
-        delete $LVM2{'LVM2_LV_NAME'} if exists $LVM2{'LVM2_LV_NAME'};
-        delete $LVM2{'LVM2_DEVICES'} if exists $LVM2{'LVM2_DEVICES'};
-        $volumeInfo{$volgroup}{$volume}{'extents'}{$blocks} = { %LVM2 };
-    }
-    foreach my $volgroup (sort keys %volumeInfo) {
-        my %volumes = %{$volumeInfo{$volgroup}};
-        foreach my $volume (sort keys %volumes) {
-            my %disks;
-            my %extents = %{$volumes{$volume}{'extents'}};
-            foreach my $blocks (sort keys %extents) {
-                my $disk = $extents{$blocks}{'LVM2_DEVICE'};
-                $disks{$disk}++;
-            }
-            $volumeInfo{$volgroup}{$volume}{'disks'} = [ sort keys %disks ];
-        }
-    }
-    return %volumeInfo;
-}
+sub main() {}
+print qq{MAIN CODE: Starting...\n} if $DEBUG;
 
 my %raidDevices = getMdDevices();
 my %lvmDisks = getLVMdisks();
@@ -269,29 +647,6 @@ getCheckMdDevices(%raidDevices);
 
 __END__
 
-sub getDiskInfo($) {
-    my $device = shift;
-    my $cmd = qq{sudo smartctl --info $device};
-    my %info;
-    open(SMARTCTL, $cmd . "2>&1 |") or die;
-    while (my $chunk = <SMARTCTL>) {
-        foreach my $line (split(/[\n\r]+/, $chunk)) {
-            print "smartctl: " . $line . "\n" if $DEBUG;
-            next unless ($line =~ /Model Family|Device Model|Serial Number/);
-            if ($line =~ /Model Family:\s+(.*)$/) {
-                $info{'type'} = $1;
-                print "smartctl: type -> " . $1 . "\n" if $DEBUG;
-            } elsif ($line =~ /Device Model:\s+(.*)$/) {
-                $info{'model'} = $1;
-                print "smartctl: model -> " . $1 . "\n" if $DEBUG;
-            } elsif ($line =~ /Serial Number:\s+(.*)$/) {
-                $info{'serial'} = $1;
-                print "smartctl: serial -> " . $1 . "\n" if $DEBUG;
-            }
-        }
-    }
-    return %info;
-}
 
 
 
