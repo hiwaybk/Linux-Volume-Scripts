@@ -454,9 +454,9 @@ sub printBackupSummary($$$) {
 		);
 		printf($format, "Sector Size:",
 			$devices{$device}{'parted'}{'sectorSizePhysical'}
-			. "(physical) / "
+			. " (physical) / "
 			. $devices{$device}{'parted'}{'sectorSizeLogical'}
-			. "(logical) "
+			. " (logical) "
 		);
 		printf($format, "Partition Type:",
 			$devices{$device}{'parted'}{'partitionTable'}
