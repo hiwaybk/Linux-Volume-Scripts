@@ -15,7 +15,7 @@ Scripts for managing LVM volumes on software RAID
 
 # ChangeLog
 * Version 0.3
-  1. Added preliminary functionality for a check option (-b) to verify all components in an array exist
+  1. Added preliminary functionality for a check option (-c) to verify all components in an array exist
 * Version 0.2
   1. Added backup option (-b) to print backup summaries
 
