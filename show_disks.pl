@@ -4,14 +4,18 @@ $DEBUG = 0;
 
 #   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -x
 #   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l kellybvol
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 10 -l md11
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l sdc
 
 # Define options
 ($OPTIONS = <<END_OPTIONS) =~ s/^[^\S\n]+//gm;
-    -h    Print this help
-    -d    Debuging level
-    -x    Dump all data in Perl hash format
     -b    Print backup summaries for each disk
+    -c    Check all arrays for completeness
+    -x    Dump all data in Perl hash format
     -l    List device info
+    -d    Debuging level
+    -h    Print this help
 END_OPTIONS
 
 use Data::Dumper;
@@ -210,6 +214,7 @@ sub getMdArrayInfo(%) {
          while (my $chunk = <MDADM>) {
              foreach my $line (split(/[\n\r]+/, $chunk)) {
                 print "getMdArrayInfo: mdadm: " . $line . "\n" if ($DEBUG > 9);
+                next if ($line =~ /^\/dev\//);
                 if ($line =~ /^ *(.*) : (.*)$/) {
                     $info{$1} = $2;
 	                print "getMdArrayInfo: key: " . $1 . "; value: " . $1 . "\n" if ($DEBUG > 7);
@@ -497,17 +502,70 @@ sub printBackupSummary($$$) {
     }
 }
 
+sub checkArrays($) {
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -c
+    print qq{checkArrays: Starting... ($DEBUG)\n} if $DEBUG;
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+    print Data::Dumper->Dump([\%devices], ['devices']) if ($DEBUG);
+    my %mdDeviceUUIDs;
+    my %diskDeviceUUIDs;
+    foreach my $device (sort keys %devices) {
+	    print qq{checkArrays: Checking device $device\n} if $DEBUG;
+	    if (exists $devices{$device}{'mdadm'}) {
+	    	print qq{checkArrays: Device $device is an md device!\n} if $DEBUG;
+		    if (exists $devices{$device}{'mdadm'}{'UUID'}) {
+		    	my $UUID = $devices{$device}{'mdadm'}{'UUID'};
+		    	print qq{checkArrays: Device $device has UUID of} . $UUID . qq{!\n} if $DEBUG;
+		    	if ($devices{$device}{'major'} == 8) {
+		    		$diskDeviceUUIDs{$device} = $UUID;
+		    	} elsif ($devices{$device}{'major'} == 9) {
+		    		$mdDeviceUUIDs{$device} = $UUID;
+		    	}
+		    }
+	    }
+	    if (exists $devices{$device}{'partitions'}) {
+	    	print qq{checkArrays: Device $device has partitions!\n} if $DEBUG;
+	    	foreach my $partition (sort keys %{$devices{$device}{'partitions'}}) {
+			    print qq{checkArrays: Checking device $device\n} if $DEBUG;
+			    if (exists $devices{$device}{'partitions'}{$partition}{'mdadm'}) {
+			    	print qq{checkArrays: Device $partition is an md device!\n} if $DEBUG;
+				    if (exists $devices{$device}{'partitions'}{$partition}{'mdadm'}{'Array UUID'}) {
+				    	my $UUID = $devices{$device}{'partitions'}{$partition}{'mdadm'}{'Array UUID'};
+				    	print qq{checkArrays: Device $partition has UUID of $UUID\n} if $DEBUG;
+		    			$diskDeviceUUIDs{$partition} = $UUID;
+				    }
+				    if (exists $devices{$device}{'partitions'}{$partition}{'mdadm'}{'UUID'}) {
+				    	my $UUID =  $devices{$device}{'partitions'}{$partition}{'mdadm'}{'UUID'};
+				    	print qq{checkArrays: Device $partition has UUID of } . $UUID . qq{!\n} if $DEBUG;
+		    			$diskDeviceUUIDs{$partition} = $UUID;
+				    }
+				}
+	    	}
+	    }
+    }
+    print Data::Dumper->Dump([\%mdDeviceUUIDs], ['mdDeviceUUIDs']) if ($DEBUG);
+    print Data::Dumper->Dump([\%diskDeviceUUIDs], ['diskDeviceUUIDs']) if ($DEBUG);
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -c
+    foreach my $mdDevice (sort keys %mdDeviceUUIDs) {
+    	foreach my $index (sort keys %{$devices{$mdDevice}{'mdadm'}{'drives'}}) {
+    		my $component = $devices{$mdDevice}{'mdadm'}{'drives'}{$index}{'disk'};
+    		if ($mdDeviceUUIDs{$mdDevice} eq $diskDeviceUUIDs{$component}) {
+				print qq{checkArrays: Device $mdDevice has component $component\n} if $DEBUG;
+				delete $diskDeviceUUIDs{$component};
+    		} else {
+				print qq{checkArrays: Device $mdDevice is missing component $component\n} if $DEBUG;
+    		}
+    	}
+    }
+    print Data::Dumper->Dump([\%diskDeviceUUIDs], ['diskDeviceUUIDs']) if ($DEBUG);
+}
+
 sub main() {}
-#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b -d 3
-#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -b
-#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l kellybvol
-#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l md21
-#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l sdc
-#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -x
 print qq{MAIN CODE: Starting...\n} if $DEBUG;
 
 # Process command line arguments
-getopts("d:xl:b", \%opts);
+getopts("d:xl:bc", \%opts);
 
 # Process debug argument
 checkArg("d", \$DEBUG, \%opts);
@@ -546,6 +604,9 @@ if ($opts{'x'}) {
     my %backupSummary = getBackupSummary(\%devices, \%lvm);
     print Data::Dumper->Dump([\%backupSummary], ['backupSummary']) if ($DEBUG);
 	printBackupSummary(\%backupSummary, \%devices, \%lvm);
+} elsif ($opts{'c'}) {
+    print qq{MAIN CODE: Checking all MD devices...\n} if $DEBUG;
+    checkArrays(\%devices);
 }
 
 __END__
