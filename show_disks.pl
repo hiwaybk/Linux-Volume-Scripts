@@ -554,7 +554,16 @@ sub checkArrays($) {
 				print qq{checkArrays: Device $mdDevice has component $component\n} if $DEBUG;
 				delete $diskDeviceUUIDs{$component};
     		} else {
-				print qq{checkArrays: Device $mdDevice is missing component $component\n} if $DEBUG;
+				print qq{checkArrays: Device $mdDevice is missing component "$component"\n} if $DEBUG;
+    		}
+    	}
+    }
+    foreach my $device (sort keys %diskDeviceUUIDs) {
+    	foreach my $mdDevice (sort keys %mdDeviceUUIDs) {
+    		if ($diskDeviceUUIDs{$device} == $mdDeviceUUIDs{$mdDevice}) {
+    			print qq{checkArrays: Device $device is missing from array $mdDevice\n} if $DEBUG;
+    			print qq{mdadm --manage /dev/$mdDevice --add /dev/$device\n};
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -c
     		}
     	}
     }
