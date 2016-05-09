@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=3 --->
+<!--- MinorVersion=4 --->
 <!--- PackageVersion=2 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -14,6 +14,8 @@ Scripts for managing LVM volumes on software RAID
 > LVM2 on RAID1 software mirrors).
 
 # ChangeLog
+* Version 0.4
+  1. Added option (-n) to output GNU Parted commands to name disk partitions based on MD device / LVM volume(s)
 * Version 0.3
   1. Added preliminary functionality for a check option (-c) to verify all components in an array exist
 * Version 0.2
