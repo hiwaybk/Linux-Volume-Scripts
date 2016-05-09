@@ -8,16 +8,6 @@ $DEBUG = 0;
 #   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 10 -l md11
 #   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 1 -l sdc
 
-# Define options
-($OPTIONS = <<END_OPTIONS) =~ s/^[^\S\n]+//gm;
-    -b    Print backup summaries for each disk
-    -c    Check all arrays for completeness
-    -x    Dump all data in Perl hash format
-    -l    List device info
-    -d    Debuging level
-    -h    Print this help
-END_OPTIONS
-
 use Data::Dumper;
 use Getopt::Std;
 
@@ -570,11 +560,113 @@ sub checkArrays($) {
     print Data::Dumper->Dump([\%diskDeviceUUIDs], ['diskDeviceUUIDs']) if ($DEBUG);
 }
 
+sub calculatepartitionNameData($$) {
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -n
+    print qq{calculatepartitionNameData: Starting... ($DEBUG)\n} if $DEBUG;
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+    my $lvmRef = shift;
+    my %lvm = %{$lvmRef};
+
+    my %partitionNameData;
+
+    foreach my $device (sort keys %devices) {
+        print qq{calculatepartitionNameData: checking $device\n} if ($DEBUG > 5);
+        next unless defined $devices{$device}{'mdadm'};
+        if (defined $partitionNameData{$device}{'md_name'}) {
+	        $partitionNameData{$device}{'md_name'} = $devices{$device}{'mdadm'}{'Name'};
+	        $partitionNameData{$device}{'md_name'} =~ s/ .*$//;
+	    } else {
+	        $partitionNameData{$device}{'md_name'} = $device;
+	    }
+    }
+	print Data::Dumper->Dump([\%partitionNameData], ['partitionNameData']) if ($DEBUG);
+
+	my %arrays;
+	foreach my $diskGroup (sort keys %lvm) {
+		foreach my $volume (sort keys %{$lvm{$diskGroup}}) {
+		    print qq{calculatepartitionNameData: Processing volume $volume in volume group $diskGroup...\n} if $DEBUG;
+		    next if ($volume =~ /^swap/);
+		    my @volumesArrays = @{$lvm{$diskGroup}{$volume}{'disks'}};
+			print Data::Dumper->Dump([\@volumesArrays], ['volumesArrays']) if ($DEBUG);
+			foreach my $array (@volumesArrays) {
+				$arrays{$array}{$diskGroup}{$volume}++;
+			}
+		}
+	}
+	print Data::Dumper->Dump([\%arrays], ['arrays']) if ($DEBUG);
+
+	foreach my $array (keys %arrays) {
+		my @vgvols;
+		foreach my $volumeGroup (keys %{$arrays{$array}}) {
+			#push(@vgvols, $volumeGroup . "-" . join("_", keys %{$arrays{$array}{$volumeGroup}}));
+			push(@vgvols, join("_", keys %{$arrays{$array}{$volumeGroup}}));
+		}
+		$partitionNameData{$array}{'lvm_name'} = join("/", @vgvols);
+	}
+	print Data::Dumper->Dump([\%partitionNameData], ['partitionNameData']) if ($DEBUG);
+
+ 	foreach my $array (keys %partitionNameData) {
+	    print qq{calculatepartitionNameData: Looking for members of array $array...\n} if $DEBUG;
+ 		my @array_partitions;
+ 		foreach my $arrayMember (keys %{$devices{$array}{'mdadm'}{'drives'}}) {
+		    print qq{calculatepartitionNameData: Looking for array $array member $arrayMember...\n} if $DEBUG;
+ 			push(@array_partitions, $devices{$array}{'mdadm'}{'drives'}{$arrayMember}{'disk'});
+ 		}
+		$partitionNameData{$array}{'members'} = \@array_partitions;
+ 	}
+	print Data::Dumper->Dump([\%partitionNameData], ['partitionNameData']) if ($DEBUG);
+
+	my %partitionNames;
+ 	foreach my $array (keys %partitionNameData) {
+ 		my $partition_name = join('/', $partitionNameData{$array}{'md_name'}, $partitionNameData{$array}{'lvm_name'});
+		$partition_name =~ s,^/*(.*?)/*$,$1,;
+		foreach my $partition (sort @{$partitionNameData{$array}{'members'}}) {
+			$partitionNames{$partition} = $partition_name;
+		}
+	}
+	print Data::Dumper->Dump([\%partitionNames], ['partitionNames']) if ($DEBUG);
+
+	my @cmds;
+	foreach my $array (sort keys %partitionNames) {
+		print qq{calculatepartitionNameData: Finding disk for array $array...\n} if $DEBUG;
+		foreach my $device (keys %devices) {
+			print qq{calculatepartitionNameData: Checking device $device...\n} if $DEBUG;
+			next unless defined $devices{$device}{'partitions'};
+			foreach my $partition (keys %{$devices{$device}{'partitions'}}) {
+				print qq{calculatepartitionNameData: Checking partition $partition...\n} if $DEBUG;
+				next unless ($partition eq $array);
+				$part_no = $partition;
+				$part_no =~ s/^$device//;
+				print qq{calculatepartitionNameData: Partition number is $part_no...\n} if $DEBUG;
+				push (@cmds, sprintf (qq{sudo parted /dev/%s name %d %s}, $device, $part_no, $partitionNames{$array}));
+			}
+		}
+	}
+	print Data::Dumper->Dump([\@cmds], ['cmds']) if ($DEBUG);
+
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -n
+#   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -n
+
+    return @cmds;
+}
+
 sub main() {}
 print qq{MAIN CODE: Starting...\n} if $DEBUG;
 
+# Define options
+($OPTIONS = <<END_OPTIONS) =~ s/^[^\S\n]+//gm;
+    -b              Print backup summaries for each disk
+    -c              Check all arrays for completeness
+    -n              Name all partitions (beta)
+    -l <device>     List info for device
+    -x              Dump all data in Perl hash format
+    -d #            Debuging level
+    -h              Print this help
+END_OPTIONS
+
 # Process command line arguments
-getopts("d:xl:bc", \%opts);
+getopts("hd:xl:bcn", \%opts);
 
 # Process debug argument
 checkArg("d", \$DEBUG, \%opts);
@@ -599,213 +691,32 @@ my %devices = getDiskDevices();
 
 my %lvm = getLVMdisks();
 
-if ($opts{'x'}) {
-    print qq{MAIN CODE: Dumping Devices...\n} if $DEBUG;
-    print Data::Dumper->Dump([\%devices], ['devices']);
-    print qq{MAIN CODE: Dumping LVM...\n} if $DEBUG;
-    print Data::Dumper->Dump([\%lvm], ['lvm']);
-} elsif ($opts{'l'}) {
-    print qq{MAIN CODE: Listing Device: } . $opts{'l'} . qq{\n} if $DEBUG;
-    my %info = getDeviceInfo($LISTDISK, \%devices, \%lvm);
-    print Data::Dumper->Dump([\%info], ['info']) if ($DEBUG);
+if ($opts{'c'}) {
+    print qq{MAIN CODE: Checking all MD devices...\n} if $DEBUG;
+    checkArrays(\%devices);
+} elsif ($opts{'n'}) {
+    print qq{MAIN CODE: Naming partitions...\n} if $DEBUG;
+    my @cmds = calculatepartitionNameData(\%devices, \%lvm);
+    print Data::Dumper->Dump([\@cmds], ['cmds']) if ($DEBUG);
+    print qq{\n# Running the following should update your partition names:\n\n};
+    print join("\n", @cmds) . "\n\n";
 } elsif ($opts{'b'}) {
     print qq{MAIN CODE: Printing device backup summaries...\n} if $DEBUG;
     my %backupSummary = getBackupSummary(\%devices, \%lvm);
     print Data::Dumper->Dump([\%backupSummary], ['backupSummary']) if ($DEBUG);
 	printBackupSummary(\%backupSummary, \%devices, \%lvm);
-} elsif ($opts{'c'}) {
-    print qq{MAIN CODE: Checking all MD devices...\n} if $DEBUG;
-    checkArrays(\%devices);
+} elsif ($opts{'l'}) {
+    print qq{MAIN CODE: Listing Device: } . $opts{'l'} . qq{\n} if $DEBUG;
+    my %info = getDeviceInfo($LISTDISK, \%devices, \%lvm);
+    print Data::Dumper->Dump([\%info], ['info']); # if ($DEBUG);
+} elsif ($opts{'x'}) {
+    print qq{MAIN CODE: Dumping Devices...\n} if $DEBUG;
+    print Data::Dumper->Dump([\%devices], ['devices']);
+    print qq{MAIN CODE: Dumping LVM...\n} if $DEBUG;
+    print Data::Dumper->Dump([\%lvm], ['lvm']);
 }
 
-__END__
-
-
-sub compareArrayRef($$) {
-    my $ref1 = shift;
-    my $ref2 = shift;
-    my @a = @{$ref1};
-    my @b = @{$ref2};
-
-    %a = map { $_ => 1 } @a;
-    %b = map { $_ => 1 } @b;
-    print Data::Dumper->Dump([\%a], ['compareArrayRef %a']) if $DEBUG;
-    print Data::Dumper->Dump([\%b], ['compareArrayRef %b']) if $DEBUG;
-
-    my %results;
-    foreach my $item (sort keys %a) {
-        if (exists $b{$item}) {
-            delete $b{$item};
-        } else {
-            $results{'array 1'}{$item}++;
-        }
-    }
-    foreach my $item (sort keys %b) {
-        $results{'array 2'}{$item}++;
-    }
-
-    print Data::Dumper->Dump([\%results], ['compareArrayRef %results']) if $DEBUG;
-    return %results;
-}
-
-sub getCheckMdDevices(%) {
-    print qq{getCheckMdDevices: Starting...\n} if $DEBUG;
-    my %arrays = @_;
-    print Data::Dumper->Dump([\%arrays], ['getCheckMdDevices %arrays']) if $DEBUG;
-    foreach my $array (sort keys %arrays) {
-        print Data::Dumper->Dump([$array], ['array']) if $DEBUG;
-        my @active = @{$arrays{$array}{'components'}{'active'}};
-        print Data::Dumper->Dump([\@active], ['getCheckMdDevices @active']) if $DEBUG;
-        my @discovered = @{$arrays{$array}{'components'}{'discovered'}};
-        print Data::Dumper->Dump([\@discovered], ['getCheckMdDevices @discovered']) if $DEBUG;
-        if (compareArrayRef(\@active, \@discovered)) {
-            print qq{Array $array is bad!\n};
-            my %discovered;
-            foreach my $device (@discovered) {
-                $discovered{$device}++;
-            }
-            foreach my $device (@active) {
-                if (exists $discovered{$device}) {
-                    delete $discovered{$device};
-                    print qq{\t$device seems OK.\n};
-                } else {
-                    print qq{\t$device is in the array, but no partition found!\n};
-                }
-            }
-            foreach my $device (keys %discovered) {
-                print qq{\t$device should probably be in $array.\n};
-                print qq{\t\tmdadm --manage /dev/$array --write-mostly --add /dev/$device\n};
-            }
-        }
-        print Data::Dumper->Dump([$flag], ['getCheckMdDevices $flag']) if $DEBUG;
-
-    }
-}
-
-
-sub main() {}
-print qq{MAIN CODE: Starting...\n} if $DEBUG;
-
-my %raidDevices = getMdDevices();
-my %lvmDisks = getLVMdisks();
-
-foreach my $volgroup (sort keys %lvmDisks) {
-    print qq{Volume Group: $volgroup\n};
-    my %volumes = %{$lvmDisks{$volgroup}};
-    foreach my $volume (sort keys %volumes) {
-        print qq{\tVolume Name: $volume\n};
-        my @lvmDisks = @{$volumes{$volume}{'disks'}};
-        my @disks;
-        foreach my $lvmDisk (@lvmDisks) {
-            print qq{\tArray Name: $lvmDisk\n};
-            if (exists $raidDevices{$lvmDisk}) {
-                my @raidDisks = @{$raidDevices{$lvmDisk}{'components'}{'drives'}};
-                foreach my $disk (@raidDisks) {
-                    push(@disks, $disk);
-                }
-            } else {
-                push(@disks, $lvmDisk);
-            }
-        }
-        print qq{\t\tPhysical disks:\n\t\t\t};
-        print join("\n\t\t\t", @disks);
-        print "\n";
-    }
-}
-
-getCheckMdDevices(%raidDevices);
-
-__END__
-
-
-
-
-my %lvm = getLVMdisks();
+print qq{MAIN CODE: Dumping Devices...\n} if $DEBUG;
+print Data::Dumper->Dump([\%devices], ['devices']) if $DEBUG;
+print qq{MAIN CODE: Dumping LVM...\n} if $DEBUG;
 print Data::Dumper->Dump([\%lvm], ['lvm']) if $DEBUG;
-
-foreach my $volgroup (sort keys %lvm) {
-    print "\n\n" . "Volume Group " . $volgroup . "\n";
-    foreach my $volume (sort keys %{$lvm{$volgroup}}) {
-        next if ($volume eq "swapvol");
-        print "Volume " . $volume . "...\n";
-        foreach my $array (sort keys %{$lvm{$volgroup}{$volume}}) {
-            print "... has " . $lvm{$volgroup}{$volume}{$array}{'count'} . " chunk(s) on array " . $array . " which is on disk(s):\n";
-            foreach my $disk (sort keys %{$lvm{$volgroup}{$volume}{$array}{'components'}}) {
-                print "\t" . $disk;
-                foreach my $item (qw{type model serial}) {
-                    #print qq{\n\t\t} . $item . qq{: "} . $lvm{$volgroup}{$volume}{$array}{'components'}{$disk}{$item} . qq{"};
-                    printf(qq{\n\t\t%-7s %s}, $item . ":", $lvm{$volgroup}{$volume}{$array}{'components'}{$disk}{$item});
-                }
-                print qq{\n};
-            }
-        }
-        print qq{\n};
-        print qq{\n};
-    }
-}
-
-# foreach my $vol (sort keys %lvm) {
-#     print "The volume " . $vol . "is on the array(s):\n";
-#     my @raid = sort keys %{$lvm{$vol}};
-#     foreach my $raid (@raid) {
-#         print "\t" . $raid . " (pieces: " . $lvm{$vol}{$raid}{'count'} . ") which is on the disk(s):\n";
-#         foreach my $device (@{$raid{$raid}}) {
-#             print "\t\t" . $device . "\n";
-#         }
-#     }
-# }
-
-__END__
-
-
-my $first_row = 0;
-my %volumes;
-my %raiddevices;
-
-print Dumper(\%volumes) if $DEBUG;
-print Dumper(\%raiddevices) if $DEBUG;
-
-my @raiddevices = keys %raiddevices;
-
-my %mdstat;
-open(MDSTAT, "/proc/mdstat") or die;
-while (my $chunk = <MDSTAT>) {
-	foreach my $line (split(/[\n\r]/, $chunk)) {
-		next if ($line =~ /^\s/);
-		next unless ($line =~ /active/);
-		print "MDSTAT: " . $line . "\n" if ($DEBUG);
-		(my $array, my $components) = split(/\s*:\s*/, $line);
-		print "Array: " . $array . "\n" if ($DEBUG);
-		print "Components: " . $components . "\n" if ($DEBUG);
-		foreach my $component (split(/\s+/, $components)) {
-			next unless ($component =~ /\[/);
-			$component =~ s/\[.*$//;
-			print "Component: " . $component . "\n" if ($DEBUG);
-			if (defined($mdstat{$array})) {
-				$mdstat{$array} .= "|" . $component;
-			} else {
-				$mdstat{$array} = $component;
-			}
-		}
-	}
-}
-print Dumper(\%mdstat) if $DEBUG;
-
-#cat /proc/mdstat | grep md21 | tr ' ' '\n' | grep '\[' | cut -d '[' -f1
-
-#md12 : active raid1 sdg3[3](W) sdb3[2]
-#      2926318848 blocks super 1.2 [2/2] [UU]
-#      bitmap: 0/22 pages [0KB], 65536KB chunk
-
-
-foreach my $volume (sort keys %volumes) {
-	print qq{Volume "$volume" has};
-	my @segments = ();
-	foreach my $disk (sort keys $volumes{$volume}) {
-		my $segmentCount  = $volumes{$volume}{$disk};
-		push(@segments, sprintf (qq{ %d segment%s on disk %s}, $segmentCount, $segmentCount > 1 ? "s": "", $disk));
-	}
-	print join(", and ", @segments) . qq{.\n};
-}
-
-
