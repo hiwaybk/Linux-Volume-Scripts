@@ -1,11 +1,11 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=4 --->
-<!--- PackageVersion=2 --->
+<!--- MinorVersion=5 --->
+<!--- PackageVersion=1 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
-<!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66)" --->
+<!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66), smartmontools (>= 6.5+svn4324)" --->
 <!--- Description="Scripts to help manage LVM on software RAID (level 1)" --->
 
 Scripts for managing LVM volumes on software RAID
@@ -14,6 +14,9 @@ Scripts for managing LVM volumes on software RAID
 > LVM2 on RAID1 software mirrors).
 
 # ChangeLog
+* Version 0.5
+  1. Corrected use of Perl pointers / hashes
+  2. Included SmartMonTools dependency 
 * Version 0.4
   1. Added option (-n) to output GNU Parted commands to name disk partitions based on MD device / LVM volume(s)
 * Version 0.3

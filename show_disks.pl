@@ -315,7 +315,7 @@ sub returnDiskDevices($) {
                 print qq{returnDiskDevices: It's a disk!\n} if ($DEBUG > 2);
                 push (@{$disks{$device}{'subdevices'}}, $device);
                 if (exists $devices{$device}{'partitions'}) {
-                    push (@{$disks{$device}{'subdevices'}}, keys $devices{$device}{'partitions'});
+                    push (@{$disks{$device}{'subdevices'}}, keys %{$devices{$device}{'partitions'}});
                 }
             }
         }
