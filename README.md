@@ -2,10 +2,10 @@
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
 <!--- MinorVersion=6 --->
-<!--- PackageVersion=2 --->
+<!--- PackageVersion=3 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
-<!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66), smartmontools (>= 6.5+svn4324)" --->
+<!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66), smartmontools (>= 6.4+svn4214-1)" --->
 <!--- Description="Scripts to help manage LVM on software RAID (level 1)" --->
 
 Scripts for managing LVM volumes on software RAID
@@ -16,6 +16,7 @@ Scripts for managing LVM volumes on software RAID
 # ChangeLog
 * Version 0.6
   1. Updated debugging
+  1. Updated packaging to only require smartmontools version 6.4+svn4214-1
 * Version 0.5
   1. Corrected use of Perl pointers / hashes
   2. Included SmartMonTools dependency 
