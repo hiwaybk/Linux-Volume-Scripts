@@ -315,7 +315,7 @@ sub returnDiskDevices($) {
                 print qq{returnDiskDevices: It's a disk!\n} if ($DEBUG > 2);
                 push (@{$disks{$device}{'subdevices'}}, $device);
                 if (exists $devices{$device}{'partitions'}) {
-                    push (@{$disks{$device}{'subdevices'}}, keys %{$devices{$device}{'partitions'}});
+                    push (@{$disks{$device}->{'subdevices'}}, keys %{$devices{$device}->{'partitions'}});
                 }
             }
         }
@@ -594,7 +594,7 @@ sub calculatepartitionNameData($$) {
 			}
 		}
 	}
-	print Data::Dumper->Dump([\%arrays], ['arrays']) if ($DEBUG);
+	print Data::Dumper->Dump([\%arrays], ['calculatepartitionNameData: arrays']) if ($DEBUG);
 
 	foreach my $array (keys %arrays) {
 		my @vgvols;
@@ -604,7 +604,7 @@ sub calculatepartitionNameData($$) {
 		}
 		$partitionNameData{$array}{'lvm_name'} = join("/", @vgvols);
 	}
-	print Data::Dumper->Dump([\%partitionNameData], ['partitionNameData']) if ($DEBUG);
+	print Data::Dumper->Dump([\%partitionNameData], ['calculatepartitionNameData: partitionNameData']) if ($DEBUG);
 
  	foreach my $array (keys %partitionNameData) {
 	    print qq{calculatepartitionNameData: Looking for members of array $array...\n} if $DEBUG;
@@ -621,6 +621,11 @@ sub calculatepartitionNameData($$) {
  	foreach my $array (keys %partitionNameData) {
  		my $partition_name = join('/', $partitionNameData{$array}{'md_name'}, $partitionNameData{$array}{'lvm_name'});
 		$partition_name =~ s,^/*(.*?)/*$,$1,;
+		if ($partition_name eq 'md10') {
+		    $partition_name = "md10/DiskInfo";
+		} elsif ($partition_name eq 'md0') {
+		    $partition_name = "md0/boot";
+		}
 		foreach my $partition (sort @{$partitionNameData{$array}{'members'}}) {
 			$partitionNames{$partition} = $partition_name;
 		}
@@ -629,16 +634,16 @@ sub calculatepartitionNameData($$) {
 
 	my @cmds;
 	foreach my $array (sort keys %partitionNames) {
-		print qq{calculatepartitionNameData: Finding disk for array $array...\n} if $DEBUG;
+		print qq{calculatepartitionNameData: Finding disk for array $array...\n} if ($DEBUG > 2);
 		foreach my $device (keys %devices) {
-			print qq{calculatepartitionNameData: Checking device $device...\n} if $DEBUG;
+			print qq{calculatepartitionNameData: Checking device $device...\n} if ($DEBUG > 3);
 			next unless defined $devices{$device}{'partitions'};
 			foreach my $partition (keys %{$devices{$device}{'partitions'}}) {
-				print qq{calculatepartitionNameData: Checking partition $partition...\n} if $DEBUG;
+				print qq{calculatepartitionNameData: Checking partition $partition...\n} if ($DEBUG > 4);
 				next unless ($partition eq $array);
 				$part_no = $partition;
 				$part_no =~ s/^$device//;
-				print qq{calculatepartitionNameData: Partition number is $part_no...\n} if $DEBUG;
+				print qq{calculatepartitionNameData: Partition number is $part_no...\n} if ($DEBUG > 4);
 				push (@cmds, sprintf (qq{sudo parted /dev/%s name %d %s}, $device, $part_no, $partitionNames{$array}));
 			}
 		}
@@ -691,6 +696,13 @@ my %devices = getDiskDevices();
 
 my %lvm = getLVMdisks();
 
+if ( ($opts{'x'}) or ($DEBUG) ) {
+    print qq{MAIN CODE: Dumping Devices...\n};
+    print Data::Dumper->Dump([\%devices], ['devices']);
+    print qq{MAIN CODE: Dumping LVM...\n};
+    print Data::Dumper->Dump([\%lvm], ['lvm']);
+}
+
 if ($opts{'c'}) {
     print qq{MAIN CODE: Checking all MD devices...\n} if $DEBUG;
     checkArrays(\%devices);
@@ -709,14 +721,4 @@ if ($opts{'c'}) {
     print qq{MAIN CODE: Listing Device: } . $opts{'l'} . qq{\n} if $DEBUG;
     my %info = getDeviceInfo($LISTDISK, \%devices, \%lvm);
     print Data::Dumper->Dump([\%info], ['info']); # if ($DEBUG);
-} elsif ($opts{'x'}) {
-    print qq{MAIN CODE: Dumping Devices...\n} if $DEBUG;
-    print Data::Dumper->Dump([\%devices], ['devices']);
-    print qq{MAIN CODE: Dumping LVM...\n} if $DEBUG;
-    print Data::Dumper->Dump([\%lvm], ['lvm']);
 }
-
-print qq{MAIN CODE: Dumping Devices...\n} if $DEBUG;
-print Data::Dumper->Dump([\%devices], ['devices']) if $DEBUG;
-print qq{MAIN CODE: Dumping LVM...\n} if $DEBUG;
-print Data::Dumper->Dump([\%lvm], ['lvm']) if $DEBUG;

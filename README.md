@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=5 --->
+<!--- MinorVersion=6 --->
 <!--- PackageVersion=2 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -14,6 +14,8 @@ Scripts for managing LVM volumes on software RAID
 > LVM2 on RAID1 software mirrors).
 
 # ChangeLog
+* Version 0.6
+  1. Updated debugging
 * Version 0.5
   1. Corrected use of Perl pointers / hashes
   2. Included SmartMonTools dependency 
