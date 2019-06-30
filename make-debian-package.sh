@@ -61,6 +61,8 @@ cat README.md | grep '^> ' | sed -e 's/^> / /' >> "${CONTROL}"
 ####
 
 cp show_disks.pl "${NAME}/usr/local/bin"
+cp bks_show_disks.pl "${NAME}/usr/local/bin"
+cp bks_md0_boot_updater.sh "${NAME}/usr/local/bin"
 
 ####
 #### Make the package (finally)!
