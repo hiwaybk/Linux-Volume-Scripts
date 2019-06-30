@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Check if the PATH variable in /etc/environment contains the
+# /usr/local/scripts directory
+
+DONE=`cat /etc/environment | grep ^PATH= | grep /usr/local/scripts | wc -l`
+
+if [ "${DONE}" -lt 1 ]; then
+	perl -p -i.$$.orig -e 's,^PATH=",PATH="/usr/local/scripts:,' /etc/environment
+fi
