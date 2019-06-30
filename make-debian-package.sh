@@ -67,3 +67,11 @@ cp show_disks.pl "${NAME}/usr/local/bin"
 ####
 
 dpkg-deb --build "${NAME}" && rm -rf "${NAME}"
+
+####
+#### If this is a Git repository, show the current status
+####
+
+if [ -d .git ]; then
+    git status
+fi
