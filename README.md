@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=7 --->
+<!--- MinorVersion=8 --->
 <!--- PackageVersion=4 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -14,6 +14,8 @@ Scripts for managing LVM volumes on software RAID
 > LVM2 on RAID1 software mirrors).
 
 # ChangeLog
+* Version 0.8
+  1. Added -e option to bks_show_disks.pl to output an summery of all disks
 * Version 0.7
   1. Renamed show_disks.pl to bks_show_disks.pl
   2. Added bks_md0_boot_updater.sh

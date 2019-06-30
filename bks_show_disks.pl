@@ -492,6 +492,67 @@ sub printBackupSummary($$$) {
     }
 }
 
+sub printBackupLog($$$) {
+#   /home/kellyb/Dropbox/Files/Code/Github/Linux-Volume-Scripts/bks_show_disks.pl -d 3 -e
+    print qq{printBackupLog: Starting... ($DEBUG)\n} if $DEBUG;
+    my $backupInfoRef = shift;
+    my %backupInfo = %{$backupInfoRef};
+    my $devicesRef = shift;
+    my %devices = %{$devicesRef};
+    my $lvmRef = shift;
+    my %lvm = %{$lvmRef};
+    print Data::Dumper->Dump([\%devices], ['devices']) if ($DEBUG);
+    print Data::Dumper->Dump([\%lvm], ['lvm']) if ($DEBUG);
+    print Data::Dumper->Dump([\%backupInfo], ['backupInfo']) if ($DEBUG);
+
+    my @output_fields = (
+        'Serial',
+        'MD',
+        'Location',
+        'Drive',
+        'Size',
+        'Notes'
+    );
+    my $output_format = "%-20s %-5s %-10s %-20s %-10s %s\n";
+
+    my %entry_log;
+    foreach my $device (sort keys %backupInfo) {
+        my %entry;
+
+        my @volumes;
+		foreach my $volumeGroup (sort keys %{$backupInfo{$device}{'volumes'}}) {
+			foreach my $volume (sort keys %{$backupInfo{$device}{'volumes'}{$volumeGroup}}) {
+			    push(@volumes, qq{$volumeGroup / $volume});
+			}
+		}
+
+        $entry{'Serial'} = $devices{$device}{'smart'}{'serial'};
+        $entry{'MD'} = join(", ", sort grep(!/^md(0|10)$/, @{$backupInfo{$device}{'metadevices'}}));
+        $entry{'Location'} = $device;
+        $entry{'Drive'} = $devices{$device}{'smart'}{'model'};
+        $entry{'Size'} = $devices{$device}{'parted'}{'Capacity'};
+        $entry{'Notes'} = join("; ", @volumes);
+
+        print Data::Dumper->Dump([\%entry], ['printBackupLog: entry']) if ($DEBUG);
+        $entry_log{$device} = \%entry;
+    }
+    print Data::Dumper->Dump([\%entry_log], ['printBackupLog: entry_log']) if ($DEBUG);
+
+    printf($output_format, @output_fields);
+    foreach my $device (sort keys %entry_log) {
+        my %entry = %{$entry_log{$device}};
+		printf($output_format,
+		    $entry{'Serial'},
+		    $entry{'MD'},
+		    $entry{'Location'},
+		    $entry{'Drive'},
+		    $entry{'Size'},
+		    $entry{'Notes'}
+		);
+    }
+
+}
+
 sub checkArrays($) {
 #   /home/kellyb/Documents/Code/GIT/Linux-Volume-Scripts/show_disks.pl -d 3 -c
     print qq{checkArrays: Starting... ($DEBUG)\n} if $DEBUG;
@@ -662,6 +723,7 @@ print qq{MAIN CODE: Starting...\n} if $DEBUG;
 # Define options
 ($OPTIONS = <<END_OPTIONS) =~ s/^[^\S\n]+//gm;
     -b              Print backup summaries for each disk
+    -e              Print backup log entries for each disk
     -c              Check all arrays for completeness
     -n              Name all partitions (beta)
     -l <device>     List info for device
@@ -671,7 +733,7 @@ print qq{MAIN CODE: Starting...\n} if $DEBUG;
 END_OPTIONS
 
 # Process command line arguments
-getopts("hd:xl:bcn", \%opts);
+getopts("hd:xl:becn", \%opts);
 
 # Process debug argument
 checkArg("d", \$DEBUG, \%opts);
@@ -717,6 +779,11 @@ if ($opts{'c'}) {
     my %backupSummary = getBackupSummary(\%devices, \%lvm);
     print Data::Dumper->Dump([\%backupSummary], ['backupSummary']) if ($DEBUG);
 	printBackupSummary(\%backupSummary, \%devices, \%lvm);
+} elsif ($opts{'e'}) {
+    print qq{MAIN CODE: Printing device backup log entries...\n} if $DEBUG;
+    my %backupSummary = getBackupSummary(\%devices, \%lvm);
+    print Data::Dumper->Dump([\%backupSummary], ['backupSummary']) if ($DEBUG);
+	printBackupLog(\%backupSummary, \%devices, \%lvm);
 } elsif ($opts{'l'}) {
     print qq{MAIN CODE: Listing Device: } . $opts{'l'} . qq{\n} if $DEBUG;
     my %info = getDeviceInfo($LISTDISK, \%devices, \%lvm);
