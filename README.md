@@ -2,7 +2,7 @@
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
 <!--- MinorVersion=8 --->
-<!--- PackageVersion=6 --->
+<!--- PackageVersion=7 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
 <!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66), smartmontools (>= 6.2+svn3841-1.2ubu)" --->

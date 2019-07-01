@@ -513,7 +513,7 @@ sub printBackupLog($$$) {
         'Size',
         'Notes'
     );
-    my $output_format = "%-20s %-5s %-10s %-20s %-10s %s\n";
+    my $output_format = "%-20s %-5s %-10s %-25s %-10s %s\n";
 
     my %entry_log;
     foreach my $device (sort keys %backupInfo) {
