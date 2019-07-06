@@ -1,8 +1,8 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=8 --->
-<!--- PackageVersion=7 --->
+<!--- MinorVersion=9 --->
+<!--- PackageVersion=0 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
 <!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66), smartmontools (>= 6.2+svn3841-1.2ubu)" --->
@@ -14,6 +14,8 @@ Scripts for managing LVM volumes on software RAID
 > LVM2 on RAID1 software mirrors).
 
 # ChangeLog
+* Version 0.9
+  1. Fixed test for "DiskInfo" partitions
 * Version 0.8
   1. Added -e option to bks_show_disks.pl to output an summery of all disks
 * Version 0.7

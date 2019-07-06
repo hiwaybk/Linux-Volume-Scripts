@@ -92,7 +92,7 @@ watch_rebuild "md0"
 
 for DISK in ${DISKS}; do
     INFODISKS=`sudo parted /dev/${DISK} unit gb print | egrep -i '(DiskInfo|md10)' | awk '{print $1}'`
-    test "${INFODISKS}" -gt 0 && INFODISKS="${DISK}${INFODISKS}"
+    test "${INFODISKS}" && test "${INFODISKS}" -gt 0 && INFODISKS="${DISK}${INFODISKS}"
     MD10_ALL_PARTS="${MD10_ALL_PARTS} ${INFODISKS}"
 done
 test "${DEBUG}" -gt 0 && echo MD10_ALL_PARTS: ${MD10_ALL_PARTS}
