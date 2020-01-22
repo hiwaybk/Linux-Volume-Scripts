@@ -72,11 +72,11 @@ sudo dpkg-reconfigure grub-pc
 
 sudo update-grub
 
-for DISK in ${DISKS}; do
-	if [ `echo ${MD0_ALL_PARTS} | grep ${DISK} | wc -l` -gt 0 ]; then
-		sudo grub-install /dev/${DISK}
-	fi
-done
+#for DISK in ${DISKS}; do
+#	if [ `echo ${MD0_ALL_PARTS} | grep ${DISK} | wc -l` -gt 0 ]; then
+#		sudo grub-install /dev/${DISK}
+#	fi
+#done
 
 for x in ${MD0_SPARES}; do
 	sudo mdadm --manage /dev/md0 --add /dev/${x}

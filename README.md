@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=9 --->
+<!--- MinorVersion=10 --->
 <!--- PackageVersion=0 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -14,6 +14,8 @@ Scripts for managing LVM volumes on software RAID
 > LVM2 on RAID1 software mirrors).
 
 # ChangeLog
+* Version 0.10
+  1. Added bks_nuke_disk.sh script
 * Version 0.9
   1. Fixed test for "DiskInfo" partitions
 * Version 0.8

@@ -31,11 +31,11 @@ NAME="${PACKAGE}_${VERSION}"
 ####
 
 if [ `ls -1 ${PACKAGE}*.deb 2>/dev/null | wc -l` -gt 0 ]; then
-	for x in ${PACKAGE}*.deb; do
-		rm -rf $x
+    for x in ${PACKAGE}*.deb; do
+        rm -rf $x
         if [ -d .git ]; then
-		    git rm $x
-		fi
+            git rm $x
+        fi
     done
 fi
 
@@ -43,7 +43,6 @@ fi
 #### Create the file structure for the package
 ####
 
-mkdir -p "${NAME}/usr/local/bin"
 mkdir -p "${NAME}/DEBIAN"
 
 ####
@@ -65,17 +64,18 @@ cat README.md | grep '^> ' | sed -e 's/^> / /' >> "${CONTROL}"
 #### Let's put some stuff into the file structure...
 ####
 
-cp show_disks.pl "${NAME}/usr/local/bin"
-cp bks_show_disks.pl "${NAME}/usr/local/bin"
-cp bks_md0_boot_updater.sh "${NAME}/usr/local/bin"
+mkdir -p "${NAME}/usr/local/scripts"
+cp bks_show_disks.pl "${NAME}/usr/local/scripts"
+cp bks_md0_boot_updater.sh "${NAME}/usr/local/scripts"
+cp bks_nuke_disk.sh "${NAME}/usr/local/scripts"
 
 ####
 #### Let's put some stuff into the control directory...
 ####
 
 for SCRIPT in postinst prerm; do
-	test -r "package_scripts/${SCRIPT}" \
-	&& cp "package_scripts/${SCRIPT}" "${NAME}/DEBIAN"
+    test -r "package_scripts/${SCRIPT}" \
+    && cp "package_scripts/${SCRIPT}" "${NAME}/DEBIAN"
 done
 
 ####
