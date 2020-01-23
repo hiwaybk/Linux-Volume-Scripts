@@ -13,7 +13,14 @@ Scripts for managing LVM volumes on software RAID
 > This is my collection of scripts for managing my disk volumes (using
 > LVM2 on RAID1 software mirrors).
 
+> bks_md0_boot_updater.sh
+> bks_nuke_disk.sh
+> bks_show_disks.pl
+
+
 # ChangeLog
+* Version 0.11
+  1. Updated bks_md0_boot_updater.sh to call bks_show_disks.pl properly
 * Version 0.10
   1. Added bks_nuke_disk.sh script
 * Version 0.9

@@ -123,7 +123,7 @@ cat /proc/mdstat
 #### Save Disk Info
 #### #### #### ####
 
-show_disks.pl -b | sudo tee "${DISKINFO}/Summary.txt" > /dev/null
+bks_show_disks.pl -b | sudo tee "${DISKINFO}/Summary.txt" > /dev/null
 
 for DISK in $DISKS; do
 	sudo smartctl -x /dev/$DISK | sudo tee "${DISKINFO}/SmartCTL-${DISK}.txt" > /dev/null
