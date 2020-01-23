@@ -112,11 +112,11 @@ watch_rebuild "m1d0"
 #### Rename partitions
 #### #### #### ####
 
-show_disks.pl -n | sort | sh -x
+bks_show_disks.pl | sort | sh -x
 
-echo ""
-echo ""
+echo ""; echo ""; echo ""
 date
+echo ""; echo ""; echo ""
 cat /proc/mdstat
 
 #### #### #### ####
