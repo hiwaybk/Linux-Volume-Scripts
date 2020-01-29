@@ -1,8 +1,8 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=11 --->
-<!--- PackageVersion=1 --->
+<!--- MinorVersion=12 --->
+<!--- PackageVersion=0 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
 <!--- Depends="perl (>= 5.14.2), mdadm (>= 3.2.5), lvm2 (>= 2.02.66), smartmontools (>= 6.2+svn3841-1.2ubu)" --->
@@ -19,6 +19,10 @@ Scripts for managing LVM volumes on software RAID
 
 
 # ChangeLog
+* Version 0.12
+  1. Removed exposed credentail (Slack WebHook) from bks_nuke_disk.sh
+     Now read from /etc/default/slack_webhook
+     If /etc/default/slack_webhook doesn't exist, don't prompt to send data to Slack
 * Version 0.11
   1. Updated bks_md0_boot_updater.sh to call bks_show_disks.pl properly
 * Version 0.10

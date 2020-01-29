@@ -6,6 +6,13 @@
 VARS_STORAGE=/tmp/zero_disk_vars.txt
 SOURCE=/dev/zero
 TEMP=/tmp/`basename $0`.$$.tmp
+WEBHOOK_FILENAME="/etc/default/slack_webhook" # File with single line: SLACK_WEBHOOK='http://xxx'
+
+if [ -r "${WEBHOOK_FILENAME}" ]; then
+	source "${WEBHOOK_FILENAME}"
+else
+	SLACK_WEBHOOK=''
+fi
 
 
 #---  FUNCTION  ----------------------------------------------------------------
@@ -176,15 +183,16 @@ __lshw_drive_size() {
 
 __slack_hostalert() {
     FILE="${1}"
-    WEBHOOKURL="https://hooks.slack.com/services/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"
-    if [ -r "${FILE}" ]; then
-        DATA=`
-            echo '{"text":"'
-            echo 'Disk Information:\n\n'
-            cat "${FILE}" | sed -E ':a;N;$!ba;s/\r{0,1}\n/\n/g'
-            echo '"}'
-        `
-        curl -X POST -H 'Content-type: application/json' --data "${DATA}" "${WEBHOOKURL}"
+    if [ "${SLACK_WEBHOOK}" ]; then
+		if [ -r "${FILE}" ]; then
+			DATA=`
+				echo '{"text":"'
+				echo 'Disk Information:\n\n'
+				cat "${FILE}" | sed -E ':a;N;$!ba;s/\r{0,1}\n/\n/g'
+				echo '"}'
+			`
+			curl -X POST -H 'Content-type: application/json' --data "${DATA}" "${SLACK_WEBHOOK}"
+		fi
     fi
 }
 
@@ -239,9 +247,11 @@ mount | grep -i "${DRIVE}"
 
 echo "Check complete."
 
-echo ""
-__prompt_user SLACK "Send data to Slack" "Yes"
-SLACK=`echo "${SLACK}n" | cut -c-1 | tr 'Y' 'y'`
+if [ "${SLACK_WEBHOOK}" ]; then
+	echo ""
+	__prompt_user SLACK "Send data to Slack" "Yes"
+	SLACK=`echo "${SLACK}n" | cut -c-1 | tr 'Y' 'y'`
+fi
 
 if [ "${SLACK}" = 'y' ]; then
     __slack_hostalert "${TEMP}"
