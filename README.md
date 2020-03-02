@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=12 --->
+<!--- MinorVersion=13 --->
 <!--- PackageVersion=0 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -19,6 +19,8 @@ Scripts for managing LVM volumes on software RAID
 
 
 # ChangeLog
+* Version 0.13
+  1. Corrected some input/output redirection errors in bks_nuke_disk.sh
 * Version 0.12
   1. Removed exposed credentail (Slack WebHook) from bks_nuke_disk.sh
      Now read from /etc/default/slack_webhook

@@ -134,7 +134,23 @@ __readVars() {
 #   DESCRIPTION:  List disks from /proc/partitions
 #-------------------------------------------------------------------------------
 __listDrives() {
-    cat /proc/partitions | awk '/sd.$/ {print $4}' | sort 
+    cat /proc/partitions | awk '/sd.$/ {print $4}' | sort
+}
+
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  __listDrivesDetails
+#   DESCRIPTION:  List disks from /proc/partitions with details
+#-------------------------------------------------------------------------------
+__listDrivesDetails() {
+	for DEV in `cat /proc/partitions | awk '/sd.$/ {print $4}' | sort`; do
+		echo ""
+		echo "Disk: $DEV"
+		sudo lshw -class disk 2>/dev/null \
+		| awk "/${DEV}/" RS='*' ORS="\n" \
+		| grep : \
+		| egrep '^       (product|vendor|serial|size):'
+	done | more
 }
 
 
@@ -154,7 +170,7 @@ __drive_info_lshw() {
 #-------------------------------------------------------------------------------
 __lshw_drive_parted() {
     DEVICE="${1}"
-	sudo parted $DEVICE unit gb print
+	sudo parted $DEVICE unit gb print < /dev/null
 }
 
 
@@ -170,6 +186,20 @@ __lshw_drive_size() {
 	SIZE=`expr "${SIZE}" + 1`
 	SIZE="${SIZE}g"
 	if [ "${SIZE}" = "g" ]; then
+	    die "Can't find size for '${DISK}'"
+	fi
+	echo "${SIZE}"
+}
+
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  __lshw_drive_size_kb
+#   DESCRIPTION:  Output size for a disk
+#-------------------------------------------------------------------------------
+__lshw_drive_size_kb() {
+    DISK="${1}"
+	SIZE=`cat /proc/partitions | grep "${DISK}$" | awk '{print $3}'`
+	if [ "${SIZE}" = "" ]; then
 	    die "Can't find size for '${DISK}'"
 	fi
 	echo "${SIZE}"
@@ -207,7 +237,7 @@ __readVars
 # Pompt the user for a drive
 echo ""
 echo "Available drives:"
-__listDrives
+__listDrivesDetails
 
 echo ""
 __prompt_user DRIVE "Please enter the drive to wipe" ""
@@ -297,11 +327,7 @@ REPARTITION=`echo "${REPARTITION}n" | cut -c-1 | tr 'Y' 'y'`
 #   DESCRIPTION:  Wipe current partitions and info
 #-------------------------------------------------------------------------------
 
-if [ "${CONTINUE}" = 'y' ]; then
-    SIZE=`__lshw_drive_size "${DRIVE}"`
-else
-    exit 0
-fi
+SIZE=`__lshw_drive_size "${DRIVE}"`
 
 if [ "${WIPELVM}" = 'y' ]; then
 	for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
@@ -320,7 +346,9 @@ fi
 
 if [ "${ZEROPART}" = 'y' ]; then
 	for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
-		sudo dd if="${SOURCE}" bs=4096 count=256 of="/dev/${PART}"
+	    SKIP_KB=`__lshw_drive_size_kb "${DRIVE}"`
+	    SKIP_KB=`expr "${SKIP_KB}" - 10`
+		sudo dd if="${SOURCE}" bs=4096 count=11 skip="${SKIP_KB}" of="${TARGET}"
 	done
     echo "Done."
 fi
@@ -331,6 +359,10 @@ if [ "${ZEROALL}" = 'y' ]; then
 fi
 
 if [ "${REPARTITION}" = 'y' ]; then
+
+	if [ "${ZEROPART}" = 'y' ]; then
+		sudo dd if="${SOURCE}" bs=512 count=32 of="${TARGET}"
+	fi
 
 	sudo parted "${TARGET}" mklabel gpt yes || exit
 
