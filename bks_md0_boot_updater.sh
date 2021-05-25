@@ -106,7 +106,7 @@ done
 
 sudo mdadm --grow /dev/md10 --raid-devices="${MIRRORS}"
 
-watch_rebuild "m1d0"
+watch_rebuild "md10"
 
 #### #### #### ####
 #### Rename partitions
