@@ -9,9 +9,9 @@ TEMP=/tmp/`basename $0`.$$.tmp
 WEBHOOK_FILENAME="/etc/default/slack_webhook" # File with single line: SLACK_WEBHOOK='http://xxx'
 
 if [ -r "${WEBHOOK_FILENAME}" ]; then
-	source "${WEBHOOK_FILENAME}"
+    source "${WEBHOOK_FILENAME}"
 else
-	SLACK_WEBHOOK=''
+    SLACK_WEBHOOK=''
 fi
 
 
@@ -143,14 +143,14 @@ __listDrives() {
 #   DESCRIPTION:  List disks from /proc/partitions with details
 #-------------------------------------------------------------------------------
 __listDrivesDetails() {
-	for DEV in `cat /proc/partitions | awk '/sd.$/ {print $4}' | sort`; do
-		echo ""
-		echo "Disk: $DEV"
-		sudo lshw -class disk 2>/dev/null \
-		| awk "/${DEV}/" RS='*' ORS="\n" \
-		| grep : \
-		| egrep '^       (product|vendor|serial|size):'
-	done | more
+    for DEV in `cat /proc/partitions | awk '/sd.$/ {print $4}' | sort`; do
+        echo ""
+        echo "Disk: $DEV"
+        sudo lshw -class disk 2>/dev/null \
+        | awk "/${DEV}/" RS='*' ORS="\n" \
+        | grep : \
+        | egrep '^       (product|vendor|serial|size):'
+    done | more
 }
 
 
@@ -160,7 +160,7 @@ __listDrivesDetails() {
 #-------------------------------------------------------------------------------
 __drive_info_lshw() {
     DEVICE="${1}"
-	sudo lshw -class disk 2>/dev/null | awk "/${DEVICE}/" RS='*' ORS="\n" | grep :
+    sudo lshw -class disk 2>/dev/null | awk "/${DEVICE}/" RS='*' ORS="\n" | grep :
 }
 
 
@@ -170,7 +170,7 @@ __drive_info_lshw() {
 #-------------------------------------------------------------------------------
 __lshw_drive_parted() {
     DEVICE="${1}"
-	sudo parted $DEVICE unit gb print < /dev/null
+    sudo parted $DEVICE unit gb print < /dev/null
 }
 
 
@@ -180,15 +180,15 @@ __lshw_drive_parted() {
 #-------------------------------------------------------------------------------
 __lshw_drive_size() {
     DISK="${1}"
-	SIZE=`cat /proc/partitions | grep "${DISK}$" | awk '{print $3}'`
-	SIZE=`expr "${SIZE}" / 1024`
-	SIZE=`expr "${SIZE}" / 1024`
-	SIZE=`expr "${SIZE}" + 1`
-	SIZE="${SIZE}g"
-	if [ "${SIZE}" = "g" ]; then
-	    die "Can't find size for '${DISK}'"
-	fi
-	echo "${SIZE}"
+    SIZE=`cat /proc/partitions | grep "${DISK}$" | awk '{print $3}'`
+    SIZE=`expr "${SIZE}" / 1024`
+    SIZE=`expr "${SIZE}" / 1024`
+    SIZE=`expr "${SIZE}" + 1`
+    SIZE="${SIZE}g"
+    if [ "${SIZE}" = "g" ]; then
+        die "Can't find size for '${DISK}'"
+    fi
+    echo "${SIZE}"
 }
 
 
@@ -198,11 +198,11 @@ __lshw_drive_size() {
 #-------------------------------------------------------------------------------
 __lshw_drive_size_kb() {
     DISK="${1}"
-	SIZE=`cat /proc/partitions | grep "${DISK}$" | awk '{print $3}'`
-	if [ "${SIZE}" = "" ]; then
-	    die "Can't find size for '${DISK}'"
-	fi
-	echo "${SIZE}"
+    SIZE=`cat /proc/partitions | grep "${DISK}$" | awk '{print $3}'`
+    if [ "${SIZE}" = "" ]; then
+        die "Can't find size for '${DISK}'"
+    fi
+    echo "${SIZE}"
 }
 
 
@@ -214,15 +214,15 @@ __lshw_drive_size_kb() {
 __slack_hostalert() {
     FILE="${1}"
     if [ "${SLACK_WEBHOOK}" ]; then
-		if [ -r "${FILE}" ]; then
-			DATA=`
-				echo '{"text":"'
-				echo 'Disk Information:\n\n'
-				cat "${FILE}" | sed -E ':a;N;$!ba;s/\r{0,1}\n/\n/g'
-				echo '"}'
-			`
-			curl -X POST -H 'Content-type: application/json' --data "${DATA}" "${SLACK_WEBHOOK}"
-		fi
+        if [ -r "${FILE}" ]; then
+            DATA=`
+                echo '{"text":"'
+                echo 'Disk Information:\n\n'
+                cat "${FILE}" | sed -E ':a;N;$!ba;s/\r{0,1}\n/\n/g'
+                echo '"}'
+            `
+            curl -X POST -H 'Content-type: application/json' --data "${DATA}" "${SLACK_WEBHOOK}"
+        fi
     fi
 }
 
@@ -278,9 +278,9 @@ mount | grep -i "${DRIVE}"
 echo "Check complete."
 
 if [ "${SLACK_WEBHOOK}" ]; then
-	echo ""
-	__prompt_user SLACK "Send data to Slack" "Yes"
-	SLACK=`echo "${SLACK}n" | cut -c-1 | tr 'Y' 'y'`
+    echo ""
+    __prompt_user SLACK "Send data to Slack" "Yes"
+    SLACK=`echo "${SLACK}n" | cut -c-1 | tr 'Y' 'y'`
 fi
 
 if [ "${SLACK}" = 'y' ]; then
@@ -330,26 +330,32 @@ REPARTITION=`echo "${REPARTITION}n" | cut -c-1 | tr 'Y' 'y'`
 SIZE=`__lshw_drive_size "${DRIVE}"`
 
 if [ "${WIPELVM}" = 'y' ]; then
-	for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
-		sudo pvcreate "/dev/${PART}"
-		sudo pvremove "/dev/${PART}"
-	done
+    echo ""
+    echo "Wiping LVM data...."
+    for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
+        sudo pvcreate "/dev/${PART}"
+        sudo pvremove "/dev/${PART}"
+    done
     echo "Done."
 fi
 
 if [ "${WIPEMDADM}" = 'y' ]; then
-	for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
-		sudo mdadm --zero-superblock "/dev/${PART}"
-	done
+    echo ""
+    echo "Wiping MD data...."
+    for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
+        sudo mdadm --zero-superblock "/dev/${PART}"
+    done
     echo "Done."
 fi
 
 if [ "${ZEROPART}" = 'y' ]; then
-	for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
-	    SKIP_KB=`__lshw_drive_size_kb "${DRIVE}"`
-	    SKIP_KB=`expr "${SKIP_KB}" - 10`
-		sudo dd if="${SOURCE}" bs=4096 count=11 skip="${SKIP_KB}" of="${TARGET}"
-	done
+    echo ""
+    echo "Wiping partitions...."
+    for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
+        SKIP_KB=`__lshw_drive_size_kb "${DRIVE}"`
+        SKIP_KB=`expr "${SKIP_KB}" - 10`
+        sudo dd if="${SOURCE}" bs=4096 count=11 skip="${SKIP_KB}" of="${TARGET}"
+    done
     echo "Done."
 fi
 
@@ -360,30 +366,49 @@ fi
 
 if [ "${REPARTITION}" = 'y' ]; then
 
-	if [ "${ZEROPART}" = 'y' ]; then
-		sudo dd if="${SOURCE}" bs=512 count=32 of="${TARGET}"
-	fi
+    if [ "${ZEROPART}" = 'y' ]; then
+        echo ""
+        echo "Wiping start of disk...."
+        sudo dd if="${SOURCE}" bs=512 count=2048 of="${TARGET}"
+    fi
 
-	sudo parted "${TARGET}" mklabel gpt yes || exit
+        sudo parted --script --align optimal -- "${TARGET}" \
+                mklabel gpt \
+                mkpart GRUB 1MiB 2Mib \
+                set 1 bios_grub on \
+                mkpart 'DiskInfo' 2MiB 100MiB \
+                mkpart 'Blank_for_/boot' 100MiB 900MiB \
+                set 3 raid on \
+                set 3 boot on \
+                mkpart 'Blank_for_LVM' 900MiB 100% \
+                set 4 raid on
 
-	sudo parted "${TARGET}" mkpart GRUB 1m 2m
-	sudo parted "${TARGET}" set 1 bios_grub on
+    sleep 5
 
-	sudo parted "${TARGET}" mkpart 'DiskInfo' 2m 100m
+    if [ "${WIPELVM}" = 'y' ]; then
+        echo ""
+        echo "Wiping LVM data from new partitions...."
+        for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
+            sudo pvcreate "/dev/${PART}"
+            sudo pvremove "/dev/${PART}"
+        done
+        echo "Done."
+    fi
 
-	sudo parted "${TARGET}" mkpart 'Blank_for_/boot' 100m 1g
-	sudo parted "${TARGET}" set 3 raid on
-	sudo parted "${TARGET}" set 3 boot on
+    if [ "${WIPEMDADM}" = 'y' ]; then
+        echo ""
+        echo "Wiping MD data from new partitions...."
+        for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
+            sudo mdadm --zero-superblock "/dev/${PART}"
+        done
+        echo "Done."
+    fi
 
-	sudo parted "${TARGET}" mkpart 'Blank_for_LVM' 1g 100%
-	sudo parted "${TARGET}" set 4 raid on
-
-	sleep 2
-
-	for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
-		sudo mdadm --zero-superblock "/dev/${PART}"
-		sudo dd if="${SOURCE}" bs=4096 count=256 of="/dev/${PART}"
-	done
+    echo ""
+    echo "Zero'ing new partitions...."
+    for PART in `cat /proc/partitions | awk '{print $4}' | grep "^${DRIVE}."`; do
+        sudo dd if="${SOURCE}" bs=4096 count=256 of="/dev/${PART}"
+    done
 
 fi
 

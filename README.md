@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=14 --->
+<!--- MinorVersion=15 --->
 <!--- PackageVersion=0 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -19,6 +19,9 @@ Scripts for managing LVM volumes on software RAID
 
 
 # ChangeLog
+* Version 0.15
+  1. Rewrote bks_nuke_disk.sh code calling parted to use proper CLI scripting options
+  2. Added some status output to bks_nuke_disk.sh
 * Version 0.14
   1. Corrected typo in md10 device name in bks_md0_boot_updater.sh
 * Version 0.13
