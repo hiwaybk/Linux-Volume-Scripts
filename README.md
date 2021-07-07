@@ -1,7 +1,7 @@
 # Linux_Volume_Scripts
 <!--- Project=Linux-Volume-Scripts --->
 <!--- MajorVersion=0 --->
-<!--- MinorVersion=15 --->
+<!--- MinorVersion=16 --->
 <!--- PackageVersion=0 --->
 <!--- MaintainerName="Brian Kelly" --->
 <!--- MaintainerEmail=Github@Brian.Kelly.name --->
@@ -19,6 +19,8 @@ Scripts for managing LVM volumes on software RAID
 
 
 # ChangeLog
+* Version 0.16
+  1. Updated bks_nuke_disk.sh code to cache output of lshw -class disk instead of multiple calls
 * Version 0.15
   1. Rewrote bks_nuke_disk.sh code calling parted to use proper CLI scripting options
   2. Added some status output to bks_nuke_disk.sh

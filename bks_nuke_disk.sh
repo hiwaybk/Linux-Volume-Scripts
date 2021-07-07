@@ -143,10 +143,12 @@ __listDrives() {
 #   DESCRIPTION:  List disks from /proc/partitions with details
 #-------------------------------------------------------------------------------
 __listDrivesDetails() {
+	LSHWDISKS="/tmp/lshw_disks-$$.tmp"
+	sudo lshw -class disk 2>/dev/null >"${LSHWDISKS}"
     for DEV in `cat /proc/partitions | awk '/sd.$/ {print $4}' | sort`; do
         echo ""
         echo "Disk: $DEV"
-        sudo lshw -class disk 2>/dev/null \
+        cat "${LSHWDISKS}" \
         | awk "/${DEV}/" RS='*' ORS="\n" \
         | grep : \
         | egrep '^       (product|vendor|serial|size):'
